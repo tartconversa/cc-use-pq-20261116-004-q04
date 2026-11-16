@@ -199,7 +199,23 @@ def create_app(database: str | None = None) -> FastAPI:
 
     @app.post("/delivery/checks", status_code=201)
     def check_delivery(payload: Payload):
-        return service.delivery.check(payload.model_dump())
+        return service.record_delivery_check(payload.model_dump())
+
+    @app.post("/delivery/disputes", status_code=201)
+    def open_delivery_dispute(payload: Payload):
+        return service.open_delivery_dispute(payload.model_dump())
+
+    @app.post("/delivery/disputes/{dispute_id}/resolve")
+    def resolve_delivery_dispute(dispute_id: str, payload: Payload):
+        return service.resolve_delivery_dispute(dispute_id, payload.model_dump())
+
+    @app.post("/delivery/disputes/{dispute_id}/withdraw")
+    def withdraw_delivery_dispute(dispute_id: str, payload: Payload):
+        return service.withdraw_delivery_dispute(dispute_id, payload.model_dump())
+
+    @app.post("/delivery/settlements", status_code=201)
+    def settle_delivery(payload: Payload):
+        return service.settle_delivery(payload.model_dump())
 
     @app.get("/delivery/shipments/{shipment_id}")
     def shipment_delivery(shipment_id: str):
@@ -208,6 +224,10 @@ def create_app(database: str | None = None) -> FastAPI:
     @app.get("/delivery/orders/{order_id}")
     def order_delivery(order_id: str):
         return service.delivery.order(order_id)
+
+    @app.get("/delivery/shipments/{shipment_id}/disputes")
+    def shipment_disputes(shipment_id: str):
+        return service.delivery.shipment(shipment_id)["disputes"]
 
     return app
 

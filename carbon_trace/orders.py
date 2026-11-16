@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from .catalog import Catalog
+from .delivery import Delivery
 from .errors import Conflict, Invariant, Stale, require
 from .quality import Quality
 from .store import Store
@@ -11,6 +12,7 @@ class Orders:
     def __init__(self, store: Store):
         self.store = store
         self.quality = Quality()
+        self.delivery = Delivery(store)
 
     def create(self, payload: dict) -> dict:
         order_id = identifier(payload.get("order_id"), "order_id")
@@ -111,7 +113,35 @@ class Orders:
                 "SELECT * FROM reservations WHERE order_id=? ORDER BY created_revision", (order_id,))]
             active = sum((decimal(row["quantity"], "quantity") for row in reservations
                           if row["status"] == "active"), Decimal(0))
-            return {**dict(order), "reserved_tons": as_number(active), "reservations": reservations}
+            detail = {**dict(order), "reserved_tons": as_number(active), "reservations": reservations}
+        delivery = self.delivery.order(order_id)
+        quantity = decimal(order["quantity"], "order quantity")
+        reserved = decimal(detail["reserved_tons"], "reserved_tons")
+        detail.update({
+            "settlement_status": delivery["settlement_status"],
+            "current_basis": delivery["current_basis"],
+            "settlement_basis": delivery["settlement_basis"],
+            "unresolved_risks": delivery["unresolved_risks"],
+            "ordered_tons": as_number(quantity),
+            "committed_tons": delivery["committed_tons"],
+            "shipped_tons": delivery["shipped_tons"],
+            "received_tons": delivery["received_tons"],
+            "accepted_received_tons": delivery["accepted_received_tons"],
+            "damaged_tons": delivery["damaged_tons"],
+            "rejected_tons": delivery["rejected_tons"],
+            "pending_receipt_tons": delivery["pending_receipt_tons"],
+            "settled_tons": delivery["settled_tons"],
+            "unsettled_tons": delivery["unsettled_tons"],
+            "shortfall_tons": delivery["shortfall_tons"],
+            "provisional_tons": delivery["provisional_tons"],
+            "unreceived_tons": as_number(quantity - decimal(delivery["accepted_received_tons"],
+                                                           "accepted_received_tons")),
+            "uncovered_tons": as_number(max(quantity - reserved -
+                                            decimal(delivery["committed_tons"], "committed_tons"),
+                                            Decimal(0))),
+            "delivery_source_revision": delivery["source_revision"],
+        })
+        return detail
 
     def allocation(self, plant_id: str, as_of: str) -> dict:
         plant_id = identifier(plant_id, "plant_id")
@@ -125,9 +155,17 @@ class Orders:
                 reserved = self._sum(db, "SELECT quantity FROM reservations WHERE order_id=? AND status='active'",
                                      order["order_id"])
                 quantity = decimal(order["quantity"], "quantity")
+                delivery = Delivery(self.store).order(order["order_id"])
+                accepted = decimal(delivery["accepted_received_tons"], "accepted_received_tons")
                 result.append({"order_id": order["order_id"], "due_day": order["due_day"],
                                "grade": order["grade"], "status": order["status"],
                                "requested_tons": as_number(quantity), "reserved_tons": as_number(reserved),
-                               "unfilled_tons": as_number(quantity - reserved) if order["status"] == "open" else "0"})
+                               "committed_tons": delivery["committed_tons"],
+                               "accepted_received_tons": delivery["accepted_received_tons"],
+                               "settled_tons": delivery["settled_tons"],
+                               "settlement_status": delivery["settlement_status"],
+                               "unresolved_risk_count": len(delivery["unresolved_risks"]),
+                               "unfilled_tons": as_number(quantity - reserved) if order["status"] == "open" else "0",
+                               "unreceived_tons": as_number(quantity - accepted)})
             return {"plant_id": plant_id, "as_of": as_of, "source_revision": Store.revision(db),
                     "orders": result}

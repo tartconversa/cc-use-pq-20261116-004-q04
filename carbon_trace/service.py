@@ -93,3 +93,18 @@ class Service:
         payload = mapping(payload)
         return self.incidents.close(incident_id, payload.get("ended_at"),
                                     payload.get("expected_revision"))
+
+    def record_delivery_check(self, payload: dict) -> dict:
+        return self.delivery.check(mapping(payload))
+
+    def open_delivery_dispute(self, payload: dict) -> dict:
+        return self.delivery.open_dispute(mapping(payload))
+
+    def resolve_delivery_dispute(self, dispute_id: str, payload: dict) -> dict:
+        return self.delivery.resolve_dispute(dispute_id, mapping(payload))
+
+    def withdraw_delivery_dispute(self, dispute_id: str, payload: dict) -> dict:
+        return self.delivery.withdraw_dispute(dispute_id, mapping(payload))
+
+    def settle_delivery(self, payload: dict) -> dict:
+        return self.delivery.settle(mapping(payload))
